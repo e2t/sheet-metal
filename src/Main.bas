@@ -1,24 +1,7 @@
 Attribute VB_Name = "Main"
 Option Explicit
 
-Enum city_t
-    BELGOROD
-    ELK
-    CHUGUEV
-End Enum
-
-Type sm_t
-    radius As Double
-    kfactor As Double
-    matrix As Integer
-    recommend As Boolean
-    city As city_t
-End Type
-
-Type sheet_t
-    thickness As Double
-    sm() As sm_t
-End Type
+Private Const configFileName As String = "SheetMetal.conf"
 
 Dim swApp As SldWorks.SldWorks
 Dim swCurrentDoc As ModelDoc2  'maybe drawing
@@ -27,15 +10,30 @@ Dim swCurrentDrawing As DrawingDoc
 Dim swSheetMetalFeat As Feature
 Dim swBaseFlangeFeat As Feature
 
-Dim stdSheet(8) As sheet_t
+Dim stdSheet As Collection 'sheet_t
 Dim currentThickness As Double
 Dim currentRadius As Double
 Dim currentKfactor As Double
 
+Dim configFullFileName As String
+Dim sectionRegex As RegExp
+Dim lineRegex As RegExp
+     
 Sub Main()
     Set swApp = Application.SldWorks
     Set swCurrentDoc = swApp.ActiveDoc
+    configFullFileName = swApp.GetCurrentMacroPathFolder + "\" + configFileName
+    Set stdSheet = New Collection
+     
+    Set sectionRegex = New RegExp
+    sectionRegex.Pattern = "\[\s*([0-9.]+)(.*)\]"
+    sectionRegex.IgnoreCase = True
     
+    Set lineRegex = New RegExp
+    lineRegex.Pattern = "([0-9.]+)\s+([0-9.]+)(.*)"
+    lineRegex.IgnoreCase = True
+    
+    If swCurrentDoc Is Nothing Then Exit Sub
     If swCurrentDoc.GetType = swDocASSEMBLY Then
         Dim swDocSelMgr As SelectionMgr
         Set swDocSelMgr = swCurrentDoc.SelectionManager
@@ -83,95 +81,156 @@ Sub Main()
     currentRadius = swSheetMetal.BendRadius
     currentKfactor = swSheetMetal.kfactor
     
-    Init
+    GetRowsFromFile
+    InitMainForm
     MainForm.Show
 End Sub
 
-Sub InitSheet(n_sheet As Integer, n_sm As Integer, radius As Double, kfactor As Double, _
-               matrix As Integer, city As city_t, Optional recommend As Boolean = False)
-    stdSheet(n_sheet).sm(n_sm).radius = radius / 1000
-    stdSheet(n_sheet).sm(n_sm).kfactor = kfactor
-    stdSheet(n_sheet).sm(n_sm).matrix = matrix
-    stdSheet(n_sheet).sm(n_sm).city = city
-    stdSheet(n_sheet).sm(n_sm).recommend = recommend
+Function GetRowsFromFile() As Boolean
+    Dim objStream As Stream
+        
+    Set objStream = New Stream
+    objStream.Charset = "utf-8"
+    objStream.Open
+    GetRowsFromFile = False
+    
+    On Error GoTo CreateConfig
+    objStream.LoadFromFile configFullFileName
+    GoTo SuccessRead
+
+ReadConfigAgain:
+    On Error GoTo ExitFunction
+    objStream.LoadFromFile configFullFileName
+    GoTo SuccessRead
+   
+SuccessRead:
+    ReadRowsFromFile objStream
+    GetRowsFromFile = True
+ExitFunction:
+    objStream.Close
+    Set objStream = Nothing
+    Exit Function
+    
+CreateConfig:
+    CreateDefaultConfigFile objStream
+    GoTo ReadConfigAgain
+End Function
+
+Sub ReadRowsFromFile(objStream As Stream)
+    Const RowIsSection As Integer = 1
+    Const RowIsItem As Integer = 2
+    
+    Dim asheet As sheet_t
+    Dim strData
+    Dim sectionMatch As MatchCollection
+    Dim lineMatch As MatchCollection
+    Dim sm As sm_t
+    
+    Do Until objStream.EOS
+        strData = Trim(objStream.ReadText(adReadLine))
+        
+        If Len(strData) < 1 Then
+            GoTo NextDo
+        End If
+        
+        On Error GoTo NextDo
+        If sectionRegex.Test(strData) Then
+            Set sectionMatch = sectionRegex.Execute(strData)
+            Set asheet = New sheet_t
+            asheet.thickness = Val(sectionMatch.Item(0).SubMatches.Item(0)) / 1000#  ' mm => m
+            Set asheet.sm = New Collection
+            stdSheet.Add asheet
+        ElseIf lineRegex.Test(strData) Then
+            Set lineMatch = lineRegex.Execute(strData)
+            Set sm = New sm_t
+            sm.radius = Val(lineMatch.Item(0).SubMatches.Item(0)) / 1000#  ' mm => m
+            sm.kfactor = Val(lineMatch.Item(0).SubMatches.Item(1))
+            sm.note = Trim(lineMatch.Item(0).SubMatches.Item(2))
+            'MsgBox Str(sm.radius) & "_" & Str(sm.kfactor) & "_" & sm.note
+            stdSheet.Item(stdSheet.Count).sm.Add sm
+        End If
+        GoTo NextDo
+NextDo:
+    Loop
 End Sub
 
-Function Init()  'mask for button
-    stdSheet(0).thickness = 0.001
-    ReDim stdSheet(0).sm(6)
-    InitSheet 0, 0, 2.09, 0.476, 8, BELGOROD, True
-    InitSheet 0, 1, 2.5, 0.422, 16, ELK, True
-    InitSheet 0, 2, 3.38, 0.459, 22, ELK
-    InitSheet 0, 3, 5.49, 0.501, 35, ELK
-    InitSheet 0, 4, 7.92, 0.502, 50, ELK
-    InitSheet 0, 5, 9.98, 0.499, 60, ELK
-    InitSheet 0, 6, 12.43, 0.5, 80, ELK
-    
-    stdSheet(1).thickness = 0.0015
-    ReDim stdSheet(1).sm(6)
-    InitSheet 1, 0, 2.09, 0.338, 8, BELGOROD, True
-    InitSheet 1, 1, 2.5, 0.379, 16, ELK, True
-    InitSheet 1, 2, 3.38, 0.412, 22, ELK
-    InitSheet 1, 3, 5.49, 0.465, 35, ELK
-    InitSheet 1, 4, 7.92, 0.501, 50, ELK
-    InitSheet 1, 5, 9.98, 0.498, 60, ELK
-    InitSheet 1, 6, 12.43, 0.499, 80, ELK
-    
-    stdSheet(2).thickness = 0.002
-    ReDim stdSheet(2).sm(6)
-    InitSheet 2, 0, 2.47, 0.369, 12, BELGOROD, True
-    InitSheet 2, 1, 2.5, 0.348, 16, ELK, True
-    InitSheet 2, 2, 3.38, 0.382, 22, ELK
-    InitSheet 2, 3, 5.49, 0.435, 35, ELK
-    InitSheet 2, 4, 7.92, 0.474, 50, ELK
-    InitSheet 2, 5, 9.98, 0.498, 60, ELK
-    InitSheet 2, 6, 12.43, 0.501, 80, ELK
-
-    stdSheet(3).thickness = 0.003
-    ReDim stdSheet(3).sm(6)
-    InitSheet 3, 0, 2.34, 0.319, 16, BELGOROD, True
-    InitSheet 3, 1, 2.5, 0.306, 16, ELK, True
-    InitSheet 3, 2, 3.38, 0.338, 22, ELK
-    InitSheet 3, 3, 5.49, 0.39, 35, ELK
-    InitSheet 3, 4, 7.92, 0.431, 50, ELK
-    InitSheet 3, 5, 9.98, 0.455, 60, ELK
-    InitSheet 3, 6, 12.43, 0.481, 80, ELK
-    
-    stdSheet(4).thickness = 0.004
-    ReDim stdSheet(4).sm(5)
-    InitSheet 4, 0, 3.78, 0.298, 24, BELGOROD, True
-    InitSheet 4, 1, 3.38, 0.307, 22, ELK, True
-    InitSheet 4, 2, 5.49, 0.359, 35, ELK
-    InitSheet 4, 3, 7.92, 0.399, 50, ELK
-    InitSheet 4, 4, 9.98, 0.424, 60, ELK
-    InitSheet 4, 5, 12.43, 0.448, 80, ELK
-    
-    stdSheet(5).thickness = 0.005
-    ReDim stdSheet(5).sm(4)
-    InitSheet 5, 0, 6.2, 0.377, 32, BELGOROD, True
-    InitSheet 5, 1, 5.49, 0.336, 35, ELK, True
-    InitSheet 5, 2, 7.92, 0.376, 50, ELK
-    InitSheet 5, 3, 9.98, 0.4, 60, ELK
-    InitSheet 5, 4, 12.43, 0.425, 80, ELK
-    
-    stdSheet(6).thickness = 0.006
-    ReDim stdSheet(6).sm(3)
-    InitSheet 6, 0, 7.39, 0.363, 40, BELGOROD, True
-    InitSheet 6, 1, 7.92, 0.355, 50, ELK, True
-    InitSheet 6, 2, 9.98, 0.38, 60, ELK
-    InitSheet 6, 3, 12.43, 0.404, 80, ELK
-    
-    stdSheet(7).thickness = 0.008
-    ReDim stdSheet(7).sm(1)
-    InitSheet 7, 0, 11.23, 0.368, 60, BELGOROD, True
-    InitSheet 7, 1, 12.43, 0.373, 80, ELK, True
-    
-    stdSheet(8).thickness = 0.01
-    ReDim stdSheet(8).sm(0)
-    InitSheet 8, 0, 14.89, 0.464, 80, BELGOROD, True
-    
-    InitMainForm  'only after initialize stdSheet!
-End Function
+Sub CreateDefaultConfigFile(objStream As Stream)
+    'TODO: check if cannot to create file
+    objStream.WriteText _
+        "[1]" & vbNewLine & _
+        "2.09  0.476 Белгород V=8" & vbNewLine & _
+        "2.5   0.422 Польша V=16" & vbNewLine & _
+        "3.38  0.459 Польша V=22" & vbNewLine & _
+        "5.49  0.501 Польша V=35" & vbNewLine & _
+        "7.92  0.502 Польша V=50" & vbNewLine & _
+        "9.98  0.499 Польша V=60" & vbNewLine & _
+        "12.43 0.5   Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[1.5]" & vbNewLine & _
+        "2.09  0.338 Белгород V=8" & vbNewLine & _
+        "2.5   0.379 Польша V=16" & vbNewLine & _
+        "3.38  0.412 Польша V=22" & vbNewLine & _
+        "5.49  0.465 Польша V=35" & vbNewLine & _
+        "7.92  0.501 Польша V=50" & vbNewLine & _
+        "9.98  0.498 Польша V=60" & vbNewLine & _
+        "12.43 0.499 Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[2]" & vbNewLine & _
+        "2.47  0.369 Белгород V=12" & vbNewLine & _
+        "2.5   0.348 Польша V=16" & vbNewLine & _
+        "3.38  0.382 Польша V=22" & vbNewLine & _
+        "5.49  0.435 Польша V=35" & vbNewLine & _
+        "7.92  0.474 Польша V=50" & vbNewLine & _
+        "9.98  0.498 Польша V=60" & vbNewLine & _
+        "12.43 0.501 Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[3]" & vbNewLine & _
+        "2.34  0.319 Белгород V=16" & vbNewLine & _
+        "2.5   0.306 Польша V=16" & vbNewLine & _
+        "3.38  0.338 Польша V=22" & vbNewLine & _
+        "5.49  0.39  Польша V=35" & vbNewLine & _
+        "7.92  0.431 Польша V=50" & vbNewLine & _
+        "9.98  0.455 Польша V=60" & vbNewLine & _
+        "12.43 0.481 Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[4]" & vbNewLine & _
+        "3.78  0.298 Белгород V=24" & vbNewLine & _
+        "3.38  0.307 Польша V=22" & vbNewLine & _
+        "5.49  0.359 Польша V=35" & vbNewLine & _
+        "7.92  0.399 Польша V=50" & vbNewLine & _
+        "9.98  0.424 Польша V=60" & vbNewLine & _
+        "12.43 0.448 Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[5]" & vbNewLine & _
+        "6.2   0.377 Белгород V=32" & vbNewLine & _
+        "5.49  0.336 Польша V=35" & vbNewLine & _
+        "7.92  0.376 Польша V=50" & vbNewLine & _
+        "9.98  0.4   Польша V=60" & vbNewLine & _
+        "12.43 0.425 Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[6]" & vbNewLine & _
+        "7.39  0.363 Белгород V=40" & vbNewLine & _
+        "7.92  0.355 Польша V=50" & vbNewLine & _
+        "9.98  0.38  Польша V=60" & vbNewLine & _
+        "12.43 0.404 Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[8]" & vbNewLine & _
+        "11.23 0.368 Белгород V=60" & vbNewLine & _
+        "12.43 0.373 Польша V=80" & vbNewLine & _
+        vbNewLine
+    objStream.WriteText _
+        "[10]" & vbNewLine & _
+        "14.89 0.464 Белгород V=80" & vbNewLine & _
+        vbNewLine
+    objStream.SaveToFile configFullFileName
+End Sub
 
 Function FindFeatureThisType(typeName As String, model As ModelDoc2) As Feature
     Dim feat As Feature
@@ -220,10 +279,12 @@ Sub ChangeSheetMetal(s As Double, r As Double, k As Double)
     Dim swSheetMetal As SheetMetalFeatureData
     Dim swBaseFlange As IBaseFlangeFeatureData
     
-    Set swBaseFlange = swBaseFlangeFeat.GetDefinition
-    swBaseFlange.AccessSelections swCurrentModel, Nothing
-    swBaseFlange.thickness = s
-    swBaseFlangeFeat.ModifyDefinition swBaseFlange, swCurrentModel, Nothing
+    If Not swBaseFlangeFeat Is Nothing Then
+        Set swBaseFlange = swBaseFlangeFeat.GetDefinition
+        swBaseFlange.AccessSelections swCurrentModel, Nothing
+        swBaseFlange.thickness = s
+        swBaseFlangeFeat.ModifyDefinition swBaseFlange, swCurrentModel, Nothing
+    End If
     
     Set swSheetMetal = swSheetMetalFeat.GetDefinition
     swSheetMetal.AccessSelections swCurrentModel, Nothing
@@ -234,12 +295,12 @@ End Sub
 
 Sub Apply(index_sm As Integer, indexOfSheet As Integer)
     Dim sm As sm_t
-    Dim aSheet As sheet_t
+    Dim asheet As sheet_t
     
-    aSheet = stdSheet(indexOfSheet)
-    sm = aSheet.sm(index_sm)
+    Set asheet = stdSheet(indexOfSheet + 1)
+    Set sm = asheet.sm(index_sm + 1)
     
-    ChangeSheetMetal aSheet.thickness, sm.radius, sm.kfactor
+    ChangeSheetMetal asheet.thickness, sm.radius, sm.kfactor
     
     If swCurrentDoc.GetType <> swDocPART Then
         FixRollBack
@@ -295,67 +356,71 @@ Function SelectedPart(swProbeModel As ModelDoc2, textWarning As String) As PartD
 End Function
 
 Sub ChangeListRadiuses(indexOfSheet As Integer)
-    Dim i As Integer
-    Dim line As String
-    Dim city As String
-    Dim recommend As String
-    Dim sep As String
-    Dim eq As String
-    Dim sm As sm_t
+    Dim i As Variant
     
-    For i = LBound(stdSheet(indexOfSheet).sm) To UBound(stdSheet(indexOfSheet).sm)
-        sm = stdSheet(indexOfSheet).sm(i)
+    Dim selectedSheet As sheet_t
+    Set selectedSheet = stdSheet.Item(indexOfSheet + 1) 'collection index from 1
+    For Each i In selectedSheet.sm
+        Dim sm As sm_t
+        Set sm = i
         
-        If sm.city = BELGOROD Then
-            city = "Белгород"
-        ElseIf sm.city = ELK Then
-            city = "Элк     "
-        ElseIf sm.city = CHUGUEV Then
-            city = "Чугуев  "
-        End If
-        
-        If sm.recommend Then
-            recommend = "(реком.)"
-        Else
-            recommend = ""
-        End If
-        
-        sep = "    "
-        eq = " = "
-        
-        line = city + _
-               sep + "R" + eq + Format(sm.radius * 1000, "00.00") + _
+        Const sep As String = "    "
+        Const eq As String = " = "
+    
+        Dim line As String
+        line = "R" + eq + Format(sm.radius * 1000, "00.00") + _
                sep + "K" + eq + Format(sm.kfactor, "0.000") + _
-               sep + "V" + eq + Format(sm.matrix, "00") + _
-               sep + recommend
+               sep + sm.note
         
         MainForm.listSm.AddItem line
-        
-        If currentRadius = sm.radius And currentKfactor = sm.kfactor Then
-            MainForm.listSm.selected(i) = True
+    Next
+    
+    If currentThickness = selectedSheet.thickness Then
+        Dim indexSelectedRaidus As Integer
+        indexSelectedRaidus = SearchCurrentRadius(selectedSheet.sm)
+        If indexSelectedRaidus < 0 And MainForm.Visible Then
+            indexSelectedRaidus = 0
+        End If
+    Else
+        indexSelectedRaidus = 0
+    End If
+    MainForm.listSm.ListIndex = indexSelectedRaidus
+End Sub
+
+Function SearchCurrentRadius(sm As Collection) As Integer
+    Dim i As Integer
+    
+    SearchCurrentRadius = -1
+    For i = 1 To sm.Count
+        If currentRadius = sm.Item(i).radius And currentKfactor = sm.Item(i).kfactor Then
+            SearchCurrentRadius = i - 1
         End If
     Next
-End Sub
+End Function
+
+Function EditConfigFile() 'mask for button
+    Shell "notepad " & configFullFileName, vbNormalFocus
+End Function
 
 Function InitMainForm()  'mask for button
     Dim i As Integer
     Dim indexOfSheet As Integer
     Dim isStandardThickness As Boolean
     
-    For i = LBound(stdSheet) To UBound(stdSheet)
-        MainForm.cmbThick.AddItem 1000 * stdSheet(i).thickness
+    For i = 1 To stdSheet.Count
+        MainForm.cmbThick.AddItem 1000 * stdSheet.Item(i).thickness
     Next
     
     isStandardThickness = False
-    For indexOfSheet = LBound(stdSheet) To UBound(stdSheet)
-        If currentThickness = stdSheet(indexOfSheet).thickness Then  ' если толщина детали соответствует стандартной
+    For indexOfSheet = 1 To stdSheet.Count
+        If currentThickness = stdSheet.Item(indexOfSheet).thickness Then  ' если толщина детали соответствует стандартной
             isStandardThickness = True
             Exit For
         End If
     Next
     
     If isStandardThickness Then
-        MainForm.cmbThick.ListIndex = indexOfSheet
+        MainForm.cmbThick.ListIndex = indexOfSheet - 1
     Else
         MainForm.labThickness.Caption = "Толщина металла" + Str(currentThickness * 1000) + " мм"
     End If

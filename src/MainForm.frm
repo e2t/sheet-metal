@@ -39,3 +39,7 @@ Private Sub listSm_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
     End
 End Sub
 
+Private Sub settingBut_Click()
+    EditConfigFile
+    End
+End Sub

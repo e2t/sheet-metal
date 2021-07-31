@@ -2,12 +2,12 @@ VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
-Attribute VB_Name = "sheet_t"
+Attribute VB_Name = "TSheet"
 Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
 Attribute VB_Exposed = False
 Option Explicit
 
-Public thickness As Double
-Public sm As Collection  'sm_t
+Public Thickness As Double
+Public Sm As Collection  'TSm

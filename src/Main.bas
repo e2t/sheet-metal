@@ -147,6 +147,7 @@ Function InitMainForm()  'mask for button
     MainForm.labThickness.Caption = "Толщина металла" + Str(gSmMgr.CurrentThickness * 1000) + " мм"
   End If
   
+  MainForm.LstThickness.SetFocus
   MainForm.LstThickness.Enabled = Not gSmMgr.BaseFlangeFeat Is Nothing
     
 End Function

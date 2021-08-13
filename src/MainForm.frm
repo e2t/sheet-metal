@@ -51,7 +51,7 @@ End Sub
 Private Sub listSm_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
 
   RunAndExit
-    
+
 End Sub
 
 Private Sub LstThickness_DblClick(ByVal Cancel As MSForms.ReturnBoolean)

@@ -239,14 +239,39 @@ Sub FindSheetMetal( _
     
 End Sub
 
-Function FixRollBack(CurrentModel As ModelDoc2)  'mask for button
+Function IsOpened(Model As ModelDoc2) As Boolean
+  
+  Dim I As Variant
+  Dim AModelWindow As ModelWindow
+  
+  IsOpened = False
+  For Each I In swApp.Frame.ModelWindows
+    Set AModelWindow = I
+    If AModelWindow.ModelDoc Is Model Then
+      IsOpened = True
+      Exit For
+    End If
+  Next
+
+End Function
+
+Function FixRollBack(CurrentModel As ModelDoc2, CurrentDoc As ModelDoc2)  'mask for button
 
   Dim Opt As swSaveAsOptions_e
   Dim Err As swFileLoadError_e
+  Dim I As Variant
+  Dim WasOpened As Boolean
   
+  WasOpened = IsOpened(CurrentModel)
   swApp.ActivateDoc3 CurrentModel.GetPathName, False, Opt, Err
   CurrentModel.FeatureManager.EditRollback swMoveRollbackBarToEnd, ""
-  swApp.CloseDoc CurrentModel.GetPathName
+  If Not CurrentModel Is CurrentDoc Then
+    If WasOpened Then
+      swApp.ActivateDoc3 CurrentDoc.GetPathName, False, Opt, Err
+    Else
+      swApp.CloseDoc CurrentModel.GetPathName
+    End If
+  End If
   CurrentModel.SetSaveFlag
     
 End Function

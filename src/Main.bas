@@ -79,7 +79,7 @@ Sub Apply(IndexSm As Integer, IndexOfSheet As Integer)
   gSmMgr.ChangeSheetMetal ASheet.Thickness, Sm.Radius, Sm.KFactor
   
   If gCurrentDoc.GetType <> swDocPART Then
-    FixRollBack gCurrentModel
+    FixRollBack gCurrentModel, gCurrentDoc
     gCurrentDoc.ForceRebuild3 True
   End If
     

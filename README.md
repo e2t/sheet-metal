@@ -1,13 +1,15 @@
 # SheetMetal
 
-Макрос для изменения листового металла активной или выделенной в сборке детали SolidWorks.
+Макрос для зміни листового металу активної або виділеної у складанні деталі SolidWorks.
 
-### Зависимости
+![image](https://user-images.githubusercontent.com/28775275/213713847-c17a9c37-f21b-4f61-97aa-27ebe6133ee4.png)
+
+### Залежності
 
 - SolidWorks 2014+
 - Microsoft Scripting Runtime
 - Microsoft VBScript Regular Expressions 5.5
 
-### Авторские права
+### Авторські права
 
 [Zero-Clause BSD (0BSD)](https://opensource.org/licenses/0BSD)

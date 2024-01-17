@@ -1,3 +1,5 @@
+This project has been moved to https://codeberg.org/e2t/sheet-metal
+
 # SheetMetal
 
 Макрос для зміни листового металу активної або виділеної у складанні деталі SolidWorks.
